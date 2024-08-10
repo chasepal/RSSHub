@@ -1,0 +1,53 @@
+name: Sync Fork
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # 每6小时运行一次
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      
+      - name: Configure Git
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+      
+      - name: Sync Fork
+        run: |
+          # 添加原始仓库作为远程仓库
+          git remote add upstream https://github.com/DIYgod/RSSHub.git
+          
+          # 获取原始仓库的更新
+          git fetch upstream
+          
+          # 创建一个新的分支来合并更新
+          git checkout -b temp-sync
+          
+          # 合并上游更改，优先保留我们的更改
+          git merge -s recursive -X ours --no-commit upstream/master
+          
+          # 如果有冲突，保留我们的版本
+          git diff --name-only --diff-filter=U | xargs git checkout --ours
+          
+          # 提交合并
+          git commit -m "Merge upstream changes, prioritizing our changes"
+          
+          # 切换回主分支
+          git checkout master
+          
+          # 将临时分支合并到主分支
+          git merge --no-ff temp-sync
+          
+          # 推送更改到 fork
+          git push origin master
+          
+          # 删除临时分支
+          git branch -D temp-sync
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
